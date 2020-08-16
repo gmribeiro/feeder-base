@@ -1,0 +1,180 @@
+#############  #############  #############  ############       #############  ############   
+#############  #############  #############  #############      #############  ############# 
+####           ####           ####           ##############     ####           ####     #####   
+####           ####           ####           ######   ######    ####           ####     ######    
+#############  ####           ####           ######   #######   ####           ####     ##### 
+#############  #############  #############  ######   ########  #############  #############       
+####           #############  #############  ######   #######   #############  ############
+####           ####           ####           ######   ######    ####           ###########            
+####           ####           ####           ##############     ####           #### ######                   
+####           #############  #############  #############      #############  ####  ######       
+####           #############  #############  ############       #############  ####   ######    
+
+
+Please read this document to the end and keep in mind that all the steps mention in the document could be done differently, 
+I just tried to make everything as practical as possible.
+
+The application consists of a sql DB and a spring boot app. You can use other version of any of the mentioned software, 
+but be aware of any changes to the commands mentioned in this document, maven dependencies and/or source code that this may imply.
+
+I don't know if it matters but I used eclipse Eclipse IDE for Java Developers - 2020-03 to develop the spring boot app.
+
+  IMPORTANT:
+/*-------------------------------------------------------------*\
+ | I advise you to fully extract the feeder_GMTRO20200807.zip  |                   
+ | before following any of the steps described here            |
+\*-------------------------------------------------------------*/
+
+################
+# REQUIREMENTS #
+################
+
+- PostgreSQL 12 (https://www.postgresql.org/download/windows/) --> includes a bunch of useful software to work with. e.g  the visual tool pdAdmin or  a SQL shell (psql)
+- JDK 11
+- Apache Maven 3.6.3
+
+############
+# DATABASE #
+############
+
+While installing Postgres please define your user as 'postgres' and password as 'root', otherwise you won't be able to run the provided .jar version.
+
+I chose PostgreSQL because it's a complex and exciting SQL database that comes with a bunch of stuff out of the box, which eases the process of scaling your applications.
+Plus, It's totally open source and after a few tries you get used to it.
+
+Like I mentioned in the initial note, you can chose to do the process of creating your db and defining your schema (tables) in multiple ways.
+You can check the script commands and do it via a visual tool pdAdmin (which allow you to run the scripts or do it with their menus) or with the SQL shell (psql) tool 
+which comes with your PostgreSQL installation.
+
+Keep in mind that in much approaches you'll always rely on the SQL shell (psql) at some point of your process since you need to run the command "\connect feeder"
+to connect to your recently created DB (this would happen after step 2) - check the steps above).
+
+This said, I decided to use the psql shell (this emulates the whole process of running the SQL and psql commands manually inside the shell), 
+but we'll run the commands through the windows cmd (since we're able to ease the process of connecting to other db just by passing a few arguments).
+
+At least but not last, give a look at the sql files inside the data directory to get a better understanding of what we're really doing here and see
+how simple and clear it is. 
+
+NOTE: Scripts inside postgres/scripts
+
+[SET UP DB]
+	Run the following commands inside a windows cmd:
+
+		1) cd <your_installation_directory>\PostgreSQL\12\bin\
+		2) psql.exe -U postgres -d postgres -a -f "<feeder_extraction_folder>\feeder\data\db.sql"
+		3) in cmd: psql.exe -U postgres -d feeder -a -f "<feeder_extraction_folder>\feeder\data\articles_table.sql"
+	
+	**You might be requested to insert the postgres user password (defined upon installation) in steps 2) and 3)**
+
+##############
+# SPRINGBOOT #
+##############
+
+This module of the Feeder is available to you in two ways: a precompiled packaged version and via source code.
+
+1) Packaged
+
+All you need to do is to double-click on the .jar file that comes with the archive and, as long as you followed each of the steps described in the
+the database section, you're good to go!
+
+Now you're able to get articles from one fo the following endpoints:
+
+	[/feed.me/latest{count}]
+		Returns a list of the latest articles, where count is an integer and represents the top n entries of the result set.
+		If the value of count is null for any of the requests, the size of the list is equal to the default limit of articles obtained at each read - 10 (check configuration section). 
+
+	[/feed.me/all]
+		Returns all news in the database. 
+ 
+		I don't advise you to call this one if you didn't implement a procedure to clean the articles table, for example, every day. 
+		By default news are appended at every read if they weren't inserted yet and they are never deleted. I chose to follow these approach because I didn't know if
+		you guys wanted me to do an articles aggregator (useful to build a complete set of history from every read feed for the time the app was running) or just extend
+		the feed and make it available to the client, using REST.
+
+	[/feed.me/article/{id}]
+		Returns a specific article by the given id, where id is an integer and represents the field id, for any of the articles returned by each of the REST methods described above.
+		Might be useful if you somehow keep track of the articles on the client side.
+
+
+2) Source code 
+
+All you need to know is that you can read, edit and run it locally on your machine (either for developing or just debugging something).
+This allows you to build a new packaged version based on the one I'm providing right here and if you find it useful, please feel free to!
+
+Besides a bunch of dependencies that already come with Spring I have added a few maven dependencies to my project (inseide pom.xml).
+This because there were some frameworks and tools that I found useful for these use case:
+
+	postgresql - Allows me to work with SpringJPARepository and easily query the DB (either for selects, inserts, updates or deletes)
+	
+	rome (version 1.0) - Since you mentioned it should be possible to add more than one source in the future (source) I decided to go for rome.
+						 Although, multiple sources aren't supported yet, it's as easy as add an array of sources(url's) to the feed reader class
+						 and iterate over it at every read (this array can be easily configured in the application.properties file)
+						 
+	jsoup (version 1.13.1) - This helps us to parse the text on the html documents returned by the feed (news descriptions) and if I had more time I'd probably implement one module to do this myself (with regex)
+							 I think that this should be done, since it allows the feeder return both a text and a html document version of the descriptions (once again, I didn't knew the final purpose).
+							 This could be done only when returning the documents, but I think it could be useful to have it by default.
+							 
+	mapstruct (version 1.3.1.Final) - This framework allows me to define mappers as just interfaces and will generate the code to do all the mappings, based on the interface,
+									  its methods and their custome annotations they provide. Plus, we can stil define mappers the "old way" by defining defualt methods (it's 
+									  cool to assure our mappings never break from one version to another).
+									  To be honest, I see this framework as a must in projects where we have to do a lot of mappings from data entities to DTOs.
+
+
+
+Finally, before diving in our build process let's talk about the application.properties file. 
+This file contains all the "configuration fields" required to run the feeder springboot app and some are spring native while others were defined by me.
+Consider the list of properties above (the default values are between brackets) as it contains the most important properties in my opinion (from a functional point of view):
+
+	scheduler.cron (0 0/5 * * * ?) - Cron expressions allow you to freely define intervals of time, seemed like the best optio nto me given this requirement.
+									 With the default value, the scheduler will execute a read every 5 minutes (off-topic: a read is also performed upon running the springboot app)
+
+	logging.file.name (C:/feeder/logs/log.log) - I decided to take advantage of spring logging to log not only the default information, but also some custom
+												 info and exceptions that might occur in my code. It's set to local "C:" for convenience but feel free to define yours directory if you feel like it.
+												 Initially I defined this dir inside the project location, but it would be a problem while running a packaged version
+
+	spring.datasource.url (jdbc:postgresql://localhost:5432/feeder) - Postgres connection url (if you decided to change the DB name while creating it, edit the end of this property)
+	spring.datasource.username (postgres) - Postgres user, defined upon PostgreSQL installation
+	spring.datasource.password (root) - Postgres password, defined upon PostgreSQL installation
+
+	reader.urls (http://feeds.nos.nl/nosjournaal?format=xml) - The reader urls. For now only supports one string, but as mentioned, can be edited to support multiple fields.
+															   just append ",<new_feed_url>" to the final of property line
+															   
+	reader.feedLimit=10 - The number of articles stored per read. This should apply to all fields in the future and knowing the ammount of feeds we have configured, the client
+						  can easily get the latest feed_limit * number_of_feeds articles, through the "/latest" method.
+						  
+[BUILD THE SOURCE CODE]
+	Once again you can fulfil this through your IDE or any other way you feel comfortable, but I chose to do it using nothing but Apache Maven and the Windows CMD:	
+	** Make sure you have your bd up and runnng or build will faill on spring default tests **
+		
+		1) cd <source_project_directory>
+		2) mvn clean install
+
+  IMPORTANT:
+/*-----------------------------------------------------------------------------------------------------------------------*\
+| When building or running the source code for the first time, make sure you always clean and compile first.             |
+| Since Mapstruct generates the class files in pre-compile time, we need to do this to force this generation. Otherwise, |
+| Spring will return an exception while initializing, since the mapper implementation will be missing.                   |
+\*-----------------------------------------------------------------------------------------------------------------------*/
+
+################################
+# CONSIDERATIONS - WHERE TO GO #
+################################
+
+At some point I felt like I should've gone with an H2 or any other based memory if it was to follow the approach of only maintaining the last articles in the bd.
+
+All the changes below would make it easier to scale the solution up from there and would already give our app a nice level of modularity (all "pieces" would bedecoupled)
+
+	- With time I would definitely implement a simple service resgiter with springboot (e.g. Eureka is quite easy to implement with almost only annotations!) and separate both the API, reader and data packages
+	  into different springboot apps (probably would define a multi-module project where each module runs separately and registers itself upon starting)
+ 
+	- Integrate Feign to allow declarative rest calls through all the modules.
+      Once again, besides its logic all modules should have their own rest controller to allow communication between each other
+  
+	- Integrate another logging tool (e.g. sl4j) to do all of the "customized" logging (even exceptions) into a file stored in the same directory as the spring log
+	
+	- Implement a Proxy and a load balancer to work with our service register
+
+
+#############
+# The End ? #
+#############
